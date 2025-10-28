@@ -52,7 +52,13 @@ func (m *MatchEasyTierConfigServer) Match(cx *layer4.Connection) (bool, error) {
 	}
 
 	msgType := buf[easyTierMsgTypeOffset]
-	if msgType != easyTierMsgTypeSyn && msgType != easyTierMsgTypeSack {
+	var msgTypeName string
+	switch msgType {
+	case easyTierMsgTypeSyn:
+		msgTypeName = easyTierMsgTypeSynName
+	case easyTierMsgTypeSack:
+		msgTypeName = easyTierMsgTypeSackName
+	default:
 		return false, nil
 	}
 
@@ -63,6 +69,12 @@ func (m *MatchEasyTierConfigServer) Match(cx *layer4.Connection) (bool, error) {
 	payloadLen := binary.LittleEndian.Uint16(buf[easyTierLengthOffset : easyTierLengthOffset+easyTierLengthBytes])
 	if payloadLen != easyTierPayloadBytes {
 		return false, nil
+	}
+
+	if repl, ok := cx.Context.Value(caddy.ReplacerCtxKey).(*caddy.Replacer); ok && repl != nil {
+		repl.Set(replacerKeyConnID, binary.LittleEndian.Uint32(buf[:easyTierMsgTypeOffset]))
+		repl.Set(replacerKeyMsgType, msgTypeName)
+		repl.Set(replacerKeyMagic, binary.LittleEndian.Uint64(buf[easyTierMagicOffset:]))
 	}
 
 	return true, nil
@@ -98,7 +110,15 @@ const (
 	easyTierLengthOffset         = 6
 	easyTierLengthBytes          = 2
 	easyTierPayloadBytes         = 8
+	easyTierMagicOffset          = 8
 	easyTierPaddingValue         = 0x00
 	easyTierMsgTypeSyn     uint8 = 0x01
 	easyTierMsgTypeSack    uint8 = 0x02
+
+	easyTierMsgTypeSynName  = "syn"
+	easyTierMsgTypeSackName = "sack"
+
+	replacerKeyConnID  = "l4.easytier.conn_id"
+	replacerKeyMsgType = "l4.easytier.msg_type"
+	replacerKeyMagic   = "l4.easytier.magic"
 )

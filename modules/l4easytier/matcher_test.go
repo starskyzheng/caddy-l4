@@ -21,6 +21,7 @@ import (
 	"net"
 	"testing"
 
+	"github.com/caddyserver/caddy/v2"
 	"go.uber.org/zap"
 
 	"github.com/mholt/caddy-l4/layer4"
@@ -28,22 +29,31 @@ import (
 
 func TestMatchEasyTierConfigServer_Match(t *testing.T) {
 	tests := []struct {
-		name   string
-		packet []byte
-		useUDP bool
-		expect bool
+		name            string
+		packet          []byte
+		useUDP          bool
+		expect          bool
+		expectedMsgType string
+		expectedConnID  uint32
+		expectedMagic   uint64
 	}{
 		{
-			name:   "syn",
-			packet: newHandshakePacket(easyTierMsgTypeSyn, easyTierPaddingValue, easyTierPayloadBytes),
-			useUDP: true,
-			expect: true,
+			name:            "syn",
+			packet:          newHandshakePacket(easyTierMsgTypeSyn, easyTierPaddingValue, easyTierPayloadBytes),
+			useUDP:          true,
+			expect:          true,
+			expectedMsgType: easyTierMsgTypeSynName,
+			expectedConnID:  0xAABBCCDD,
+			expectedMagic:   0x0123456789ABCDEF,
 		},
 		{
-			name:   "sack",
-			packet: newHandshakePacket(easyTierMsgTypeSack, easyTierPaddingValue, easyTierPayloadBytes),
-			useUDP: true,
-			expect: true,
+			name:            "sack",
+			packet:          newHandshakePacket(easyTierMsgTypeSack, easyTierPaddingValue, easyTierPayloadBytes),
+			useUDP:          true,
+			expect:          true,
+			expectedMsgType: easyTierMsgTypeSackName,
+			expectedConnID:  0xAABBCCDD,
+			expectedMagic:   0x0123456789ABCDEF,
 		},
 		{
 			name:   "unexpected-msg-type",
@@ -106,6 +116,46 @@ func TestMatchEasyTierConfigServer_Match(t *testing.T) {
 
 			if matched != tc.expect {
 				t.Fatalf("expected match=%v, got %v", tc.expect, matched)
+			}
+
+			if matched && tc.expectedMsgType != "" {
+				repl := cx.Context.Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
+
+				msgTypeVal, ok := repl.Get(replacerKeyMsgType)
+				if !ok {
+					t.Fatalf("expected replacer key %q to be set", replacerKeyMsgType)
+				}
+				msgType, ok := msgTypeVal.(string)
+				if !ok {
+					t.Fatalf("expected msg type to be string, got %T", msgTypeVal)
+				}
+				if msgType != tc.expectedMsgType {
+					t.Fatalf("expected msg type %q, got %q", tc.expectedMsgType, msgType)
+				}
+
+				connIDVal, ok := repl.Get(replacerKeyConnID)
+				if !ok {
+					t.Fatalf("expected replacer key %q to be set", replacerKeyConnID)
+				}
+				connID, ok := connIDVal.(uint32)
+				if !ok {
+					t.Fatalf("expected conn_id to be uint32, got %T", connIDVal)
+				}
+				if connID != tc.expectedConnID {
+					t.Fatalf("expected conn_id 0x%08X, got 0x%08X", tc.expectedConnID, connID)
+				}
+
+				magicVal, ok := repl.Get(replacerKeyMagic)
+				if !ok {
+					t.Fatalf("expected replacer key %q to be set", replacerKeyMagic)
+				}
+				magic, ok := magicVal.(uint64)
+				if !ok {
+					t.Fatalf("expected magic to be uint64, got %T", magicVal)
+				}
+				if magic != tc.expectedMagic {
+					t.Fatalf("expected magic 0x%016X, got 0x%016X", tc.expectedMagic, magic)
+				}
 			}
 		})
 	}
