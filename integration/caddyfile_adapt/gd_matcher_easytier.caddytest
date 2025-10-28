@@ -1,0 +1,62 @@
+{
+	layer4 {
+		:9000 {
+			@config easytier_config_server
+			route @config {
+				proxy config-server.internal:4000
+			}
+			route {
+				proxy fallback.internal:4000
+			}
+		}
+	}
+}
+----------
+{
+	"apps": {
+		"layer4": {
+			"servers": {
+				"srv0": {
+					"listen": [
+						":9000"
+					],
+					"routes": [
+						{
+							"match": [
+								{
+									"easytier_config_server": {}
+								}
+							],
+							"handle": [
+								{
+									"handler": "proxy",
+									"upstreams": [
+										{
+											"dial": [
+												"config-server.internal:4000"
+											]
+										}
+									]
+								}
+							]
+						},
+						{
+							"handle": [
+								{
+									"handler": "proxy",
+									"upstreams": [
+										{
+											"dial": [
+												"fallback.internal:4000"
+											]
+										}
+									]
+								}
+							]
+						}
+					]
+				}
+			}
+		}
+	}
+}
